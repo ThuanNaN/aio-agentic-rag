@@ -17,8 +17,9 @@ paths:
 chunking:
   chunk_size: 1000
   chunk_overlap: 200
+  clean_workers: 8
   # Vietnamese legal markers used for article-aware splitting
-  legal_separators:
+  separators:
     - "\nĐiều "
     - "\nKhoản "
     - "\nĐiểm "
@@ -27,25 +28,18 @@ chunking:
     - " "
 
 embeddings:
-  # Provider: local | vllm  (overridden by EMBEDDING_PROVIDER env var)
-  provider: "local"
   model: "google/embeddinggemma-300m"
-
-  # local-only settings
-  device: "cpu"        # change to "cuda" if GPU available
-  batch_size: 32
-  query_prefix: "query: "     # required by multilingual-e5
-  passage_prefix: "passage: " # required by multilingual-e5
-
-  # vllm-only settings
-  # base_url: "http://localhost:8080/v1"
-  # api_key: "empty"
+  base_url: "http://localhost:8080/v1"
+  api_key: "empty"
+  batch_size: 512
+  embed_workers: 64
 
 chroma:
   collection_name: "vn_legal_docs"
   distance_metric: "cosine"
   host: "localhost"
-  port: 8001
+  port: 8000
+  upsert_bs: 512
 
 retrieval:
   k: 5          # default top-k for dense retrieval
@@ -60,9 +54,10 @@ retrieval:
     - "replaces"
 
 generation:
+  provider: "openai"
   model: "gpt-4.1"
   temperature: 0.0
-  max_tokens: 1024
+  max_tokens: 2048
 
 evaluation:
   gold_set_path: "./data/eval/gold_set.json"
