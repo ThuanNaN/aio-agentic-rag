@@ -145,6 +145,21 @@ with gr.Blocks(title="AIO Agentic RAG", theme=gr.themes.Soft()) as demo:
         answer_box = gr.Textbox(label="Answer", lines=10, interactive=False)
         sources_table = gr.DataFrame(label="Sources", interactive=False, wrap=True)
 
+        gr.Examples(
+            examples=[
+                ["Luật Đất đai 2024 có hiệu lực từ ngày nào?"],
+                ["Điều kiện để được cấp Giấy chứng nhận quyền sử dụng đất là gì?"],
+                ["Luật Doanh nghiệp 2020 quy định những loại hình doanh nghiệp nào?"],
+                ["Thủ tục thành lập công ty trách nhiệm hữu hạn gồm những bước nào?"],
+                ["Bộ luật Lao động 2019 quy định thời gian làm việc tối đa trong một tuần là bao nhiêu giờ?"],
+                ["Luật Hôn nhân và Gia đình quy định độ tuổi kết hôn tối thiểu là bao nhiêu?"],
+                ["Luật nào đã sửa đổi, bổ sung Luật Thuế thu nhập doanh nghiệp?"],
+                ["Các trường hợp miễn thuế thu nhập cá nhân theo quy định hiện hành?"],
+            ],
+            inputs=question_in,
+            label="Example Questions",
+        )
+
         ask_btn.click(
             fn=do_query,
             inputs=[question_in, strategy_in, k_in],
