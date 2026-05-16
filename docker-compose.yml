@@ -72,6 +72,7 @@ services:
     environment:
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
+      - EMBEDDING_BASE_URL=http://embedding-lb/v1
     volumes:
       - ./data:/app/data         # indexes built by ingest script
       - ./results:/app/results   # benchmark CSV output
