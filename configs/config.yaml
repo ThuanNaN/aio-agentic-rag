@@ -46,7 +46,7 @@ retrieval:
   bm25_k: 10    # candidates from BM25 before RRF
   dense_k: 10   # candidates from dense before RRF
   rrf_k: 60     # RRF constant
-  reranker_model: "BAAI/bge-m3"
+  reranker_model: "BAAI/bge-reranker-v2-m3"
   graph_max_hops: 2
   graph_edge_types:
     - "amended_by"
