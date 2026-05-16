@@ -133,7 +133,7 @@ with gr.Blocks(title="AIO Agentic RAG", theme=gr.themes.Soft()) as demo:
         with gr.Row():
             strategy_in = gr.Dropdown(
                 choices=STRATEGIES,
-                value="hybrid",
+                value="agentic",
                 label="Strategy",
                 scale=2,
             )
