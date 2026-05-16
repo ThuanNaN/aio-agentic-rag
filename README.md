@@ -1,225 +1,200 @@
-# AIO Agentic RAG — Vietnamese Legal Benchmark
+# Vietnamese Legal Agentic RAG
 
-Benchmarking **5 RAG strategies** on Vietnamese legal documents using Deep Agents orchestration.
+An Agentic RAG system for answering questions about Vietnamese legal documents, built with Deep Agents and LangGraph.
 
-## Dataset
-[th1nhng0/vietnamese-legal-documents](https://huggingface.co/datasets/th1nhng0/vietnamese-legal-documents) — ~153k docs, ~897k cross-document relationships.
+```
+User question
+     │
+     ▼
+┌────────────────────────────────────────────┐
+│             Orchestrator Agent             │
+│          (Deep Agents + LangGraph)         │
+└──────────┬──────────────────┬──────────────┘
+           │                  │
+           ▼                  ▼
+  ┌─────────────────┐  ┌───────────────────────────────┐
+  │ Ingestion Agent │  │       Legal-RAG Agent         │
+  │                 │  │                               │
+  │  HF download    │  │  1. Classify query intent     │
+  │  HTML clean     │  │  2. Route to best retrieval   │
+  │  Chunk text     │  │  3. Grade → retry if poor     │
+  │  Chroma index   │  │  4. Generate cited answer     │
+  │  BM25 index     │  │                               │
+  │  Graph index    │  │  dense · bm25 · hybrid        │
+  └─────────────────┘  │  reranker · graph             │
+                       └───────────────────────────────┘
+```
 
-## Strategies Compared
+Instead of always using the same retrieval pipeline, the agent classifies each query and picks the right strategy:
 
-| Strategy | Retrieval | Notes |
-|----------|-----------|-------|
-| **Naive RAG** | Dense (Chroma) | Baseline |
-| **Hybrid RAG** | BM25 + Dense, RRF fusion | Better keyword matching |
-| **Reranker RAG** | Hybrid + CrossEncoder | Higher precision |
-| **GraphRAG** | Hybrid + NetworkX multi-hop | Amendment chains |
-| **Agentic RAG** | Query classification → route → retry | Best quality |
+| Query type | Signal keywords | Retrieval |
+|------------|----------------|-----------|
+| `multi_hop` | "sửa đổi", "thay thế", "tham chiếu" | Graph traversal (amendment chains) |
+| `temporal` | "còn hiệu lực", "sau năm", "từ ngày" | Hybrid + date metadata filter |
+| `factual` / `reasoning` | everything else | Hybrid → CrossEncoder rerank |
+
+If fewer than 2 relevant documents are found, the agent rewrites the query and retries with dense search.
 
 ## Stack
 
-| Component | Options |
-|-----------|---------|
-| **Orchestration** | [Deep Agents](https://github.com/langchain-ai/deepagents) (`create_deep_agent`) |
-| **LLM** | OpenAI · OpenRouter · Ollama · Gemini (configurable) |
-| **Embeddings** | `google/embeddinggemma-300m` — local or vLLM server |
-| **Vector Store** | Chroma (persistent local or Docker) |
-| **BM25** | `rank-bm25` |
-| **Reranker** | `BAAI/bge-m3` |
-| **Graph** | NetworkX (amendment/reference chains) |
-| **Evaluation** | RAGAS + Recall@k + nDCG@k |
-| **API** | FastAPI |
+| Component | Technology |
+|-----------|-----------|
+| Orchestration | [Deep Agents](https://github.com/langchain-ai/deepagents) (`create_deep_agent`) |
+| LLM | OpenAI · OpenRouter · vLLM · Gemini |
+| Embeddings | `google/embeddinggemma-300m` via vLLM server |
+| Vector store | ChromaDB (HTTP, Docker) |
+| Sparse retrieval | `rank-bm25` (BM25Okapi) |
+| Reranker | `BAAI/bge-m3` CrossEncoder |
+| Graph | NetworkX DiGraph (amended_by · references · replaces) |
+| API | FastAPI |
+
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [docs/architecture.md](docs/architecture.md) | System design, agent flow, module map, extension points |
+| [docs/ingestion.md](docs/ingestion.md) | Pipeline stages, artifacts, re-running individual steps |
+| [docs/retrieval.md](docs/retrieval.md) | How each retrieval strategy works, RRF detail, tool wrappers |
+| [docs/configuration.md](docs/configuration.md) | All env vars and `config.yaml` settings |
+| [docs/api.md](docs/api.md) | REST endpoint reference with request/response examples |
 
 ---
 
-## Quick Start
+## Prerequisites
+
+- Python ≥ 3.11
+- Docker + Docker Compose
+- HuggingFace token (`HF_TOKEN`) — dataset is gated
+- One LLM API key
+- GPU machine (optional, for the vLLM embedding server)
+
+---
+
+## Quick start
 
 ### 1. Install
 
 ```bash
-pip install -e ".[dev]"
+git clone https://github.com/ThuanNaN/aio-agentic-rag.git
+cd aio-agentic-rag
+pip install -e "."
 ```
 
-For optional providers:
-```bash
-pip install -e ".[ollama]"           # Ollama
-pip install -e ".[gemini]"           # Google Gemini
-pip install -e ".[all-providers]"    # everything
-```
-
-### 2. Configure environment
+### 2. Configure
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in the relevant block for your chosen LLM and embedding provider (see [Configuration](#configuration) below).
-
-### 3. (Optional) Start Chroma via Docker
+Minimum required in `.env`:
 
 ```bash
-docker compose up -d
-# verify: curl http://localhost:8001/api/v2/heartbeat
-```
+CHROMA_HOST=localhost
+CHROMA_PORT=8000
 
-### 4. Ingest documents
-
-```bash
-# Quick smoke-test: 1000 docs
-python scripts/ingest.py --sample 1000
-
-# Full dataset (~153k docs, hours on CPU):
-# python scripts/ingest.py
-```
-
-### 5. Build the evaluation gold set
-
-```bash
-python scripts/build_eval_set.py
-```
-
-Then open `data/eval/gold_set.json` and fill in `expected_doc_ids` for each query — use `doc_id` values from `data/processed/raw_docs.json`. Without them Recall@k and nDCG@k will be 0.
-
-### 6. Run the benchmark
-
-```bash
-# All 5 strategies, 8 queries
-python scripts/run_benchmark.py --strategy all --sample 8
-
-# Single strategy
-python scripts/run_benchmark.py --strategy agentic --sample 8
-
-# Full gold set
-python scripts/run_benchmark.py --strategy all
-```
-
-Expected output:
-```
-=================================================================
-Strategy             recall@5          ndcg@10    avg_latency_ms
-=================================================================
-naive                  0.XXXX           0.XXXX          XX.XX
-hybrid                 0.XXXX           0.XXXX          XX.XX
-reranker               0.XXXX           0.XXXX          XX.XX
-graph                  0.XXXX           0.XXXX          XX.XX
-agentic                0.XXXX           0.XXXX          XX.XX
-=================================================================
-Results saved to results/benchmark_YYYYMMDD_HHMMSS.csv
-```
-
-### 7. Start the API
-
-```bash
-uvicorn src.api.app:app --reload
-```
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Index readiness check |
-| `/query` | POST | Answer a single legal question |
-| `/benchmark` | POST | Run strategies against the gold set |
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Single query
-curl -s -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Luật Đất đai số 31/2024/QH15 có hiệu lực từ ngày nào?", "strategy": "hybrid", "k": 5}'
-
-# Benchmark via API
-curl -s -X POST http://localhost:8000/benchmark \
-  -H "Content-Type: application/json" \
-  -d '{"strategies": ["naive", "hybrid", "reranker", "graph", "agentic"], "sample_n": 8}'
-```
-
----
-
-## Configuration
-
-All configuration is done through environment variables in `.env`.
-
-### LLM Provider (`LLM_PROVIDER`)
-
-| Provider | `LLM_PROVIDER` | Required keys | Example models |
-|----------|---------------|---------------|----------------|
-| OpenAI | `openai` | `OPENAI_API_KEY` | `gpt-4o-mini`, `gpt-4o`, `gpt-4.1` |
-| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | `openai/gpt-4o-mini`, `meta-llama/llama-3.1-70b-instruct` |
-| Ollama (local) | `ollama` | — | `llama3.1`, `qwen2.5`, `mistral` |
-| Google Gemini | `gemini` | `GOOGLE_API_KEY` | `gemini-1.5-flash`, `gemini-2.0-flash` |
-
-```bash
-# OpenAI
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o-mini
 OPENAI_API_KEY=sk-...
 
-# OpenRouter
-LLM_PROVIDER=openrouter
-LLM_MODEL=openai/gpt-4o-mini
-OPENROUTER_API_KEY=sk-or-...
+EMBEDDING_BASE_URL=http://localhost:8080/v1
 
-# Ollama (run: ollama pull llama3.1 first)
-LLM_PROVIDER=ollama
-LLM_MODEL=llama3.1
-
-# Gemini
-LLM_PROVIDER=gemini
-LLM_MODEL=gemini-1.5-flash
-GOOGLE_API_KEY=AIza...
+HF_TOKEN=hf_...
 ```
 
-### Embedding Provider (`EMBEDDING_PROVIDER`)
+See [docs/configuration.md](docs/configuration.md) for all options.
 
-| Provider | `EMBEDDING_PROVIDER` | Notes |
-|----------|---------------------|-------|
-| Local SentenceTransformer | `local` | Default, no server needed |
-| vLLM server | `vllm` | Faster for large datasets, GPU-accelerated |
+### 3. Start ChromaDB
 
 ```bash
-# Local (default)
-EMBEDDING_PROVIDER=local
-EMBEDDING_MODEL=google/embeddinggemma-300m
-EMBEDDING_DEVICE=cpu     # or cuda
+docker compose up -d
+```
 
-# vLLM server
-# Start: vllm serve google/embeddinggemma-300m --task embed --port 8080
-EMBEDDING_PROVIDER=vllm
-EMBEDDING_MODEL=google/embeddinggemma-300m
-EMBEDDING_BASE_URL=http://localhost:8080/v1
-EMBEDDING_API_KEY=empty
+| Service | URL |
+|---------|-----|
+| ChromaDB | `http://localhost:8000` |
+| Admin UI | `http://localhost:3001` |
+
+> Admin UI connection string: `http://chroma:8000` (Docker-internal)
+
+### 4. Start the embedding server
+
+```bash
+vllm serve google/embeddinggemma-300m --port 8080
+```
+
+### 5. Ingest documents *(run once)*
+
+```bash
+python scripts/ingest.py --sample 1000   # quick smoke test
+python scripts/ingest.py                 # full ~153k docs
+```
+
+See [docs/ingestion.md](docs/ingestion.md) for details.
+
+### 6. Start the API
+
+```bash
+uvicorn src.api.app:app --reload
+# http://localhost:8000/docs
+```
+
+### 7. Ask a question
+
+```bash
+curl -s -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Luật Đất đai số 31/2024/QH15 có hiệu lực từ ngày nào?",
+    "strategy": "agentic",
+    "k": 5
+  }' | python -m json.tool
+```
+
+```json
+{
+  "question": "Luật Đất đai số 31/2024/QH15 có hiệu lực từ ngày nào?",
+  "strategy": "agentic",
+  "answer": "Theo Luật Đất đai số 31/2024/QH15, luật này có hiệu lực thi hành từ ngày 01 tháng 01 năm 2025...",
+  "sources": [{"doc_id": "31_2024_QH15", "title": "Luật Đất đai", ...}],
+  "latency_ms": 412.3
+}
+```
+
+See [docs/api.md](docs/api.md) for the full endpoint reference.
+
+---
+
+## Optional: Benchmarking
+
+Compare the agentic strategy against simpler baselines to measure quality gains:
+
+```bash
+python scripts/build_eval_set.py         # create gold QA template
+# → fill in expected_doc_ids in data/eval/gold_set.json
+
+python scripts/run_benchmark.py --strategy all --sample 8
+```
+
+```
+=============================================================
+Strategy          recall@5       ndcg@10  avg_latency_ms
+=============================================================
+naive               0.3125        0.2841           87.43
+hybrid              0.4375        0.3912          142.17
+reranker            0.5000        0.4530          389.62
+graph               0.4375        0.4021          201.38
+agentic             0.5625        0.5104          412.90
+=============================================================
 ```
 
 ---
 
-## Project Structure
+## Dataset
 
-```
-src/
-├── llm.py          # LLM factory (OpenAI / OpenRouter / Ollama / Gemini)
-├── ingestion/      # loader, cleaner, chunker
-├── indexing/       # embeddings (local + vLLM), chroma_store, bm25_index
-├── retrieval/      # dense, bm25, hybrid, reranker, graph
-├── tools/          # @tool wrappers for subagents
-├── agents/         # Deep Agent orchestrator + subagents
-├── evaluation/     # gold_set, metrics, benchmark runner
-└── api/            # FastAPI service
+[`th1nhng0/vietnamese-legal-documents`](https://huggingface.co/datasets/th1nhng0/vietnamese-legal-documents)
 
-skills/             # SKILL.md for each RAG strategy
-notebooks/          # Exploration + results visualization
-scripts/            # CLI: ingest, benchmark, build eval set
-configs/            # config.yaml
-```
-
-## Notebooks
-
-| Notebook | Description |
-|----------|-------------|
-| `01_data_exploration` | Dataset structure, metadata analysis |
-| `02_indexing_pipeline` | Build indexes on a sample |
-| `03_pipeline_comparison` | Side-by-side strategy outputs |
-| `04_benchmark_results` | Metrics table + charts |
-
-## Additional Documentation
-
-- [Architecture Guide](docs/architecture.md) - codebase walkthrough, data flow, retrieval strategy implementation details, and extension points
+| Config | Rows | Contents |
+|--------|------|---------|
+| `metadata` | ~153k | Title, type, authority, dates, sector, status |
+| `content` | ~153k | Full HTML body |
+| `relationships` | ~897k | Cross-document edges (amended_by · references · replaces) |
