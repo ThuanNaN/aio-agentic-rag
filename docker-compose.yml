@@ -1,5 +1,16 @@
 services:
 
+  # ── Nginx load balancer for vLLM embedding servers
+  embedding-lb:
+    image: nginx:alpine
+    container_name: embedding_lb
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/embedding.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+
+
   # ── Chroma vector store
   chroma:
     image: chromadb/chroma:latest
@@ -10,7 +21,7 @@ services:
       - ./data/chroma_data:/data
     environment:
       - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
+      - PERSIST_DIRECTORY=/data
       - ANONYMIZED_TELEMETRY=FALSE
     restart: unless-stopped
     healthcheck:
@@ -33,27 +44,44 @@ services:
     restart: unless-stopped
 
 
+  # ── Gradio UI
+  ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ui
+    container_name: rag_ui
+    ports:
+      - "7860:7860"
+    environment:
+      - API_BASE_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+
   # ── FastAPI service
-  # api:
-  #   build: .
-  #   container_name: rag_api
-  #   ports:
-  #     - "8000:8000"
-  #   env_file: .env
-  #   environment:
-  #     # Connect to the chroma service inside Docker (overrides local default)
-  #     - CHROMA_HOST=chroma
-  #     - CHROMA_PORT=8000
-  #   volumes:
-  #     - ./data:/app/data         # indexes built by ingest script
-  #     - ./results:/app/results   # benchmark CSV output
-  #   depends_on:
-  #     chroma:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 15s
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: rag_api
+    ports:
+      - "8001:8000"
+    env_file: .env
+    environment:
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+    volumes:
+      - ./data:/app/data         # indexes built by ingest script
+      - ./results:/app/results   # benchmark CSV output
+    depends_on:
+      chroma:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

@@ -4,16 +4,18 @@ from __future__ import annotations
 import os
 import requests
 
-BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8001").rstrip("/")
 
 
 def health() -> dict:
     try:
-        r = requests.get(f"{BASE_URL}/health", timeout=5)
+        r = requests.get(f"{BASE_URL}/health", timeout=10)
         r.raise_for_status()
         return r.json()
     except requests.ConnectionError:
-        return {"status": "error", "indexes_ready": False, "detail": "API unreachable"}
+        return {"status": "error", "indexes_ready": False, "detail": "API unreachable — is the server running?"}
+    except requests.Timeout:
+        return {"status": "error", "indexes_ready": False, "detail": "API is starting up, please wait…"}
     except Exception as e:
         return {"status": "error", "indexes_ready": False, "detail": str(e)}
 
@@ -30,6 +32,8 @@ def query(question: str, strategy: str, k: int) -> dict:
     except requests.HTTPError as e:
         detail = e.response.json().get("detail", str(e)) if e.response else str(e)
         return {"error": detail}
+    except requests.Timeout:
+        return {"error": "Request timed out — the query took too long to complete."}
     except requests.ConnectionError:
         return {"error": "Cannot reach API. Is the FastAPI server running?"}
     except Exception as e:
