@@ -36,9 +36,8 @@ def upsert_documents(
     batch_size: int | None = None,
 ) -> int:
     """
-    Pre-embed all chunks in parallel, then upsert raw vectors via the native
-    Chroma client.  This avoids the per-batch re-embedding overhead that would
-    occur if we used LangChain's add_documents() in a loop.
+    Embed and upsert chunks in the same batch loop so peak RAM stays at one
+    batch rather than holding all embeddings in memory at once.
     """
     if emb_fn is None:
         emb_fn = get_embeddings()
@@ -47,19 +46,17 @@ def upsert_documents(
     ids = [f"{c.metadata['doc_id']}_chunk{c.metadata['chunk_index']}" for c in chunks]
     metadatas = [c.metadata for c in chunks]
 
-    # Step 1 — embed everything concurrently
-    embeddings = emb_fn.embed_parallel(texts)
-
-    # Step 2 — upsert pre-computed embeddings; no embedding happens here
     collection = store._collection  # type: ignore[attr-defined]
     bs = batch_size if batch_size is not None else config.chroma.upsert_bs
-    with tqdm(total=len(chunks), desc="Upserting to Chroma", unit="chunk") as bar:
+    with tqdm(total=len(chunks), desc="Embedding & Upserting", unit="chunk") as bar:
         for i in range(0, len(chunks), bs):
             end = min(i + bs, len(chunks))
+            batch_texts = texts[i:end]
+            embeddings = emb_fn._embed_batch(batch_texts)
             collection.upsert(
                 ids=ids[i:end],
-                embeddings=embeddings[i:end],
-                documents=texts[i:end],
+                embeddings=embeddings,
+                documents=batch_texts,
                 metadatas=metadatas[i:end],
             )
             bar.update(end - i)
