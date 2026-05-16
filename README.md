@@ -48,16 +48,6 @@ If fewer than 2 relevant documents are found, the agent rewrites the query and r
 | Graph | NetworkX DiGraph (amended_by · references · replaces) |
 | API | FastAPI |
 
-## Documentation
-
-| Doc | Description |
-|-----|-------------|
-| [docs/architecture.md](docs/architecture.md) | System design, agent flow, module map, extension points |
-| [docs/ingestion.md](docs/ingestion.md) | Pipeline stages, artifacts, re-running individual steps |
-| [docs/retrieval.md](docs/retrieval.md) | How each retrieval strategy works, RRF detail, tool wrappers |
-| [docs/configuration.md](docs/configuration.md) | All env vars and `config.yaml` settings |
-| [docs/api.md](docs/api.md) | REST endpoint reference with request/response examples |
-
 ---
 
 ## Prerequisites
@@ -101,8 +91,6 @@ EMBEDDING_BASE_URL=http://localhost:8080/v1
 HF_TOKEN=hf_...
 ```
 
-See [docs/configuration.md](docs/configuration.md) for all options.
-
 ### 3. Start ChromaDB
 
 ```bash
@@ -128,8 +116,6 @@ vllm serve google/embeddinggemma-300m --port 8080
 python scripts/ingest.py --sample 1000   # quick smoke test
 python scripts/ingest.py                 # full ~153k docs
 ```
-
-See [docs/ingestion.md](docs/ingestion.md) for details.
 
 ### 6. Start the API
 
@@ -159,8 +145,6 @@ curl -s -X POST http://localhost:8000/query \
   "latency_ms": 412.3
 }
 ```
-
-See [docs/api.md](docs/api.md) for the full endpoint reference.
 
 ---
 
