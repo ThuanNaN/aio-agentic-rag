@@ -11,8 +11,9 @@ COPY pyproject.toml .
 COPY src/ src/
 COPY configs/ configs/
 COPY skills/ skills/
+COPY ui/ ui/
 
-RUN pip install --no-cache-dir -e "."
+RUN pip install --no-cache-dir -e ".[ui]"
 
 EXPOSE 8000
 
