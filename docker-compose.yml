@@ -1,0 +1,98 @@
+services:
+
+  # ── Chroma vector store
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: chroma_db
+    ports:
+      - "8001:8000" 
+    volumes:
+      - ./data/chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8000'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+
+  # ── Chroma Admin UI 
+  chroma-admin:
+    image: fengzhichao/chromadb-admin:latest
+    container_name: chroma_admin
+    ports:
+      - "3001:3001"
+    depends_on:
+      chroma:
+        condition: service_healthy
+    restart: unless-stopped
+
+
+
+  # ── FastAPI service
+  # api:
+  #   build: .
+  #   container_name: rag_api
+  #   ports:
+  #     - "8000:8000"
+  #   env_file: .env
+  #   environment:
+  #     # Connect to the chroma service inside Docker (overrides local default)
+  #     - CHROMA_HOST=chroma
+  #     - CHROMA_PORT=8000
+  #   volumes:
+  #     - ./data:/app/data         # indexes built by ingest script
+  #     - ./results:/app/results   # benchmark CSV output
+  #   depends_on:
+  #     chroma:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 15s
+
+
+  # ── vLLM embedding server (GPU required) 
+  # Enable with: docker compose --profile vllm up
+  # Then set in .env: EMBEDDING_PROVIDER=vllm  EMBEDDING_BASE_URL=http://vllm-embed:8000/v1
+  # vllm-embed:
+  #   image: vllm/vllm-openai:latest
+  #   profiles: ["vllm"]
+  #   container_name: vllm_embed
+  #   ports:
+  #     - "8080:8000"
+  #   volumes:
+  #     - huggingface_cache:/root/.cache/huggingface
+  #   environment:
+  #     - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+  #   command: >
+  #     --model intfloat/multilingual-e5-large
+  #     --task embed
+  #     --port 8000
+  #     --dtype float16
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 60s   # model load takes time
+
+# volumes:
+#   huggingface_cache:
+#     driver: local
