@@ -74,7 +74,7 @@ services:
   #   environment:
   #     - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
   #   command: >
-  #     --model intfloat/multilingual-e5-large
+  #     --model google/embeddinggemma-300m
   #     --task embed
   #     --port 8000
   #     --dtype float16
