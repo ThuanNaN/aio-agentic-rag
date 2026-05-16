@@ -217,15 +217,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Project data (large files, generated artifacts)
-data/raw/
-data/processed/
-data/eval/gold_set.json
-results/*.csv
-results/*.png
-
+# VS Code settings and workspace files 
 .vscode/
 
-skills/
-results/
+# Project data (large files, generated artifacts)
 data/
+results/
