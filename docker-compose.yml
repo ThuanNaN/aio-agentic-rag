@@ -5,7 +5,7 @@ services:
     image: chromadb/chroma:latest
     container_name: chroma_db
     ports:
-      - "8001:8000" 
+      - "8000:8000" 
     volumes:
       - ./data/chroma_data:/chroma/chroma
     environment:
@@ -33,7 +33,6 @@ services:
     restart: unless-stopped
 
 
-
   # ── FastAPI service
   # api:
   #   build: .
@@ -58,41 +57,3 @@ services:
   #     timeout: 10s
   #     retries: 3
   #     start_period: 15s
-
-
-  # ── vLLM embedding server (GPU required) 
-  # Enable with: docker compose --profile vllm up
-  # Then set in .env: EMBEDDING_PROVIDER=vllm  EMBEDDING_BASE_URL=http://vllm-embed:8000/v1
-  # vllm-embed:
-  #   image: vllm/vllm-openai:latest
-  #   profiles: ["vllm"]
-  #   container_name: vllm_embed
-  #   ports:
-  #     - "8080:8000"
-  #   volumes:
-  #     - huggingface_cache:/root/.cache/huggingface
-  #   environment:
-  #     - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
-  #   command: >
-  #     --model google/embeddinggemma-300m
-  #     --task embed
-  #     --port 8000
-  #     --dtype float16
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: [gpu]
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 60s   # model load takes time
-
-# volumes:
-#   huggingface_cache:
-#     driver: local
