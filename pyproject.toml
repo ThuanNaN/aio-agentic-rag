@@ -17,7 +17,7 @@ dependencies = [
     "langgraph>=1.2.0",
     "langgraph-checkpoint>=4.1.0",
 
-    # Embeddings (local, multilingual)
+    # CrossEncoder reranker (sentence-transformers)
     "sentence-transformers>=5.5.0",
 
     # Vector store
@@ -54,6 +54,9 @@ dependencies = [
     # Config
     "pyyaml>=6.0",
     "python-dotenv>=1.0.0",
+
+    # Progress bars
+    "tqdm>=4.66.0",
 ]
 
 [project.optional-dependencies]
@@ -63,14 +66,13 @@ dev = [
     "ipykernel>=6.29.0",
     "jupyter>=1.0.0",
 ]
-ollama = [
-    "langchain-ollama>=1.0.0",
+ui = [
+    "gradio>=4.0.0",
+    "requests>=2.31.0",
+    "matplotlib>=3.8.0",
+    "pandas>=2.0.0",
 ]
 gemini = [
-    "langchain-google-genai>=4.0.0",
-]
-all-providers = [
-    "langchain-ollama>=1.0.0",
     "langchain-google-genai>=4.0.0",
 ]
 
