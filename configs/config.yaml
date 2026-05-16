@@ -32,7 +32,7 @@ embeddings:
   base_url: "http://localhost:8080/v1"
   api_key: "empty"
   batch_size: 512
-  embed_workers: 64
+  embed_workers: 8
 
 chroma:
   collection_name: "vn_legal_docs"
