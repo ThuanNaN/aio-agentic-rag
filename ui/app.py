@@ -115,8 +115,19 @@ def do_benchmark(strategies: list[str], sample_n: int, recall_k: int, ndcg_k: in
 
 
 # ── layout ───────────────────────────────────────────────────────────────────
-
-with gr.Blocks(title="AIO Agentic RAG", theme=gr.themes.Soft()) as demo:
+green_theme = gr.themes.Soft(
+    primary_hue="green",
+    secondary_hue="emerald",
+    neutral_hue="slate",
+).set(
+    body_background_fill="#f0fdf4",
+    block_background_fill="#ffffff",
+    block_border_color="#bbf7d0",
+    button_primary_background_fill="#22c55e",
+    button_primary_background_fill_hover="#16a34a",
+    input_background_fill="#ffffff",
+)
+with gr.Blocks(title="AIO Agentic RAG", theme=green_theme) as demo:
 
     gr.Markdown("# AIO Agentic RAG\n### Vietnamese Legal Document QA · 5 Retrieval Strategies")
 
