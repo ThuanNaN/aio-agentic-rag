@@ -1,0 +1,75 @@
+dataset:
+  name: "th1nhng0/vietnamese-legal-documents"
+  configs:
+    metadata: "metadata"
+    content: "content"
+    relationships: "relationships"
+  sample_size: null  # null = full dataset; set int (e.g. 1000) for quick smoke tests
+
+paths:
+  data_raw: "./data/raw"
+  data_processed: "./data/processed"
+  data_eval: "./data/eval"
+  bm25_index: "./data/processed/bm25.pkl"
+  graph_index: "./data/processed/graph.pkl"
+  results: "./results"
+
+chunking:
+  chunk_size: 1000
+  chunk_overlap: 200
+  # Vietnamese legal markers used for article-aware splitting
+  legal_separators:
+    - "\nĐiều "
+    - "\nKhoản "
+    - "\nĐiểm "
+    - "\n\n"
+    - "\n"
+    - " "
+
+embeddings:
+  # Provider: local | vllm  (overridden by EMBEDDING_PROVIDER env var)
+  provider: "local"
+  model: "google/embeddinggemma-300m"
+
+  # local-only settings
+  device: "cpu"        # change to "cuda" if GPU available
+  batch_size: 32
+  query_prefix: "query: "     # required by multilingual-e5
+  passage_prefix: "passage: " # required by multilingual-e5
+
+  # vllm-only settings
+  # base_url: "http://localhost:8080/v1"
+  # api_key: "empty"
+
+chroma:
+  collection_name: "vn_legal_docs"
+  distance_metric: "cosine"
+  host: "localhost"
+  port: 8001
+
+retrieval:
+  k: 5          # default top-k for dense retrieval
+  bm25_k: 10    # candidates from BM25 before RRF
+  dense_k: 10   # candidates from dense before RRF
+  rrf_k: 60     # RRF constant
+  reranker_model: "BAAI/bge-m3"
+  graph_max_hops: 2
+  graph_edge_types:
+    - "amended_by"
+    - "references"
+    - "replaces"
+
+generation:
+  model: "gpt-4.1"
+  temperature: 0.0
+  max_tokens: 1024
+
+evaluation:
+  gold_set_path: "./data/eval/gold_set.json"
+  recall_k: 5
+  ndcg_k: 10
+  query_types:
+    - "factual"
+    - "multi_hop"
+    - "temporal"
+    - "reasoning"
