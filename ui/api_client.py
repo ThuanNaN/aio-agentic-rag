@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import requests
 
-BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8001").rstrip("/")
 
 
 def health() -> dict:
