@@ -35,15 +35,15 @@ services:
 
 
   # ── Chroma Admin UI 
-  # chroma-admin:
-  #   image: fengzhichao/chromadb-admin:latest
-  #   container_name: chroma_admin
-  #   ports:
-  #     - "3001:3001"
-  #   depends_on:
-  #     chroma:
-  #       condition: service_healthy
-  #   restart: unless-stopped
+  chroma-admin:
+    image: fengzhichao/chromadb-admin:latest
+    container_name: chroma_admin
+    ports:
+      - "3001:3001"
+    depends_on:
+      chroma:
+        condition: service_healthy
+    restart: unless-stopped
 
 
   # ── Gradio UI
