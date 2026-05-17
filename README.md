@@ -67,7 +67,7 @@ If fewer than 2 relevant documents are found, the agent rewrites the query and r
 ```bash
 git clone https://github.com/ThuanNaN/aio-agentic-rag.git
 cd aio-agentic-rag
-pip install -e "."
+pip install -e ".[all]"
 ```
 
 ### 2. Configure
