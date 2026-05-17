@@ -9,7 +9,21 @@ from typing import Callable
 from langchain_core.documents import Document
 from configs import config
 from src.evaluation.gold_set import load_gold_set
-from src.evaluation.metrics import aggregate_metrics, ndcg_at_k, recall_at_k
+from src.evaluation.metrics import aggregate_metrics, compute_ragas_metrics, ndcg_at_k, recall_at_k
+
+
+def aggregate_metrics_ragas(
+    questions: list[str],
+    answers: list[str],
+    contexts: list[list[str]],
+    ground_truths: list[str],
+) -> dict[str, float]:
+    """Run RAGAS and prefix keys to distinguish from retrieval metrics."""
+    raw = compute_ragas_metrics(questions, answers, contexts, ground_truths)
+    if "ragas_error" in raw:
+        print(f"  RAGAS error: {raw['ragas_error']}")
+        return {}
+    return {f"ragas_{k}": v for k, v in raw.items() if isinstance(v, float)}
 
 
 def _retrieve_naive(query: str, k: int = 5) -> list[Document]:
@@ -79,6 +93,17 @@ STRATEGIES: dict[str, Callable] = {
 }
 
 
+def _generate_answer(question: str, docs: list[Document]) -> str:
+    """Generate an answer from retrieved docs using the configured LLM."""
+    import json
+    from src.tools.retrieval_tools import generate_answer_tool
+    docs_json = json.dumps(
+        [{"page_content": d.page_content, "metadata": d.metadata} for d in docs],
+        ensure_ascii=False,
+    )
+    return generate_answer_tool.invoke({"query": question, "docs_json": docs_json})
+
+
 def run_benchmark(
     strategies: list[str] | None = None,
     gold_path: str | None = None,
@@ -86,10 +111,14 @@ def run_benchmark(
     ndcg_k: int | None = None,
     output_dir: str | None = None,
     sample_n: int | None = None,
+    use_ragas: bool = False,
 ) -> dict[str, dict]:
     """
     Run each strategy against the gold set and return per-strategy metric summaries.
     Also writes a timestamped CSV to output_dir.
+
+    When use_ragas=True, generates LLM answers for each query and runs RAGAS metrics
+    (faithfulness, response_relevancy, and optionally context_precision if ground truths exist).
     """
     _gold_path = gold_path or config.evaluation.gold_set_path
     _recall_k = recall_k or config.evaluation.recall_k
@@ -112,12 +141,20 @@ def run_benchmark(
         per_query: list[dict[str, float]] = []
         latencies: list[float] = []
 
+        ragas_questions: list[str] = []
+        ragas_answers: list[str] = []
+        ragas_contexts: list[list[str]] = []
+        ragas_ground_truths: list[str] = []
+
         for entry in entries:
             question = entry["question"]
             relevant_ids: list[str] = entry.get("expected_doc_ids", [])
 
             t0 = time.perf_counter()
             docs = retrieve_fn(question, k=max(_recall_k, _ndcg_k))
+
+            if use_ragas:
+                answer = _generate_answer(question, docs)
             latency_ms = (time.perf_counter() - t0) * 1000
 
             retrieved_ids = [d.metadata.get("doc_id", "") for d in docs]
@@ -129,8 +166,22 @@ def run_benchmark(
             )
             latencies.append(latency_ms)
 
+            if use_ragas:
+                ragas_questions.append(question)
+                ragas_answers.append(answer)
+                ragas_contexts.append([d.page_content for d in docs])
+                ragas_ground_truths.append(entry.get("answer_ground_truth", ""))
+
         summary = aggregate_metrics(per_query)
         summary["avg_latency_ms"] = sum(latencies) / len(latencies) if latencies else 0.0
+
+        if use_ragas:
+            print(f"  Running RAGAS for {strategy_name} ({len(ragas_questions)} queries)...")
+            ragas_scores = aggregate_metrics_ragas(
+                ragas_questions, ragas_answers, ragas_contexts, ragas_ground_truths
+            )
+            summary.update(ragas_scores)
+
         all_results[strategy_name] = summary
         rows.append({"strategy": strategy_name, **summary})
 

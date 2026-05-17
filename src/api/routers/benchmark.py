@@ -18,6 +18,7 @@ async def run_benchmark(request: BenchmarkRequest) -> BenchmarkResponse:
             recall_k=request.recall_k,
             ndcg_k=request.ndcg_k,
             sample_n=n,
+            use_ragas=request.use_ragas,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Benchmark error: {e}")

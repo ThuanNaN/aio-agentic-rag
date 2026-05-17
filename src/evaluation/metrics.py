@@ -55,21 +55,43 @@ def compute_ragas_metrics(
     contexts: list[list[str]],
     ground_truths: list[str],
 ) -> dict[str, Any]:
-    """Run RAGAS evaluation. Returns a dict of metric name → score."""
+    """Run RAGAS evaluation (ragas >= 0.2 API). Returns a dict of metric name → avg score."""
     try:
-        from datasets import Dataset
-        from ragas import evaluate
-        from ragas.metrics import answer_faithfulness, answer_relevancy, context_precision
+        from ragas import evaluate, EvaluationDataset
+        from ragas.dataset_schema import SingleTurnSample
 
-        dataset = Dataset.from_dict(
-            {
-                "question": questions,
-                "answer": answers,
-                "contexts": contexts,
-                "ground_truth": ground_truths,
-            }
-        )
-        result = evaluate(dataset, metrics=[answer_faithfulness, answer_relevancy, context_precision])
-        return dict(result)
+        # Metric imports differ across ragas minor versions — try both names
+        try:
+            from ragas.metrics import Faithfulness, ResponseRelevancy
+        except ImportError:
+            from ragas.metrics import Faithfulness
+            from ragas.metrics import AnswerRelevancy as ResponseRelevancy  # type: ignore[no-redef]
+
+        has_references = any(gt for gt in ground_truths)
+        metrics: list[Any] = [Faithfulness(), ResponseRelevancy()]
+
+        if has_references:
+            try:
+                from ragas.metrics import LLMContextPrecisionWithReference
+                metrics.append(LLMContextPrecisionWithReference())
+            except ImportError:
+                try:
+                    from ragas.metrics import ContextPrecision
+                    metrics.append(ContextPrecision())
+                except ImportError:
+                    pass
+
+        samples = [
+            SingleTurnSample(
+                user_input=q,
+                response=a,
+                retrieved_contexts=c,
+                reference=gt if gt else None,
+            )
+            for q, a, c, gt in zip(questions, answers, contexts, ground_truths)
+        ]
+        dataset = EvaluationDataset(samples=samples)
+        result = evaluate(dataset, metrics=metrics)
+        return result.to_pandas().mean(numeric_only=True).to_dict()
     except Exception as e:
         return {"ragas_error": str(e)}

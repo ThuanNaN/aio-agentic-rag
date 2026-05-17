@@ -11,6 +11,7 @@ def run_strategy_eval_tool(
     sample_n: int = 0,
     recall_k: int = 5,
     ndcg_k: int = 10,
+    use_ragas: bool = False,
 ) -> str:
     """
     Run a single RAG strategy against the gold QA set and return metric summary.
@@ -19,6 +20,7 @@ def run_strategy_eval_tool(
         sample_n: Number of gold queries to use (0 = all).
         recall_k: k for Recall@k.
         ndcg_k: k for nDCG@k.
+        use_ragas: If True, generate LLM answers and compute RAGAS metrics.
     Returns:
         JSON string with metric scores.
     """
@@ -30,6 +32,7 @@ def run_strategy_eval_tool(
         recall_k=recall_k,
         ndcg_k=ndcg_k,
         sample_n=n,
+        use_ragas=use_ragas,
     )
     return json.dumps(results, ensure_ascii=False, indent=2)
 
@@ -39,6 +42,7 @@ def run_full_benchmark_tool(
     sample_n: int = 0,
     recall_k: int = 5,
     ndcg_k: int = 10,
+    use_ragas: bool = False,
 ) -> str:
     """
     Run all 5 strategies (naive, hybrid, reranker, graph, agentic) against the gold QA set.
@@ -46,6 +50,7 @@ def run_full_benchmark_tool(
         sample_n: Number of gold queries to use (0 = all).
         recall_k: k for Recall@k.
         ndcg_k: k for nDCG@k.
+        use_ragas: If True, generate LLM answers and compute RAGAS metrics.
     Returns:
         JSON string with per-strategy metric scores.
     """
@@ -57,6 +62,7 @@ def run_full_benchmark_tool(
         recall_k=recall_k,
         ndcg_k=ndcg_k,
         sample_n=n,
+        use_ragas=use_ragas,
     )
     return json.dumps(results, ensure_ascii=False, indent=2)
 
