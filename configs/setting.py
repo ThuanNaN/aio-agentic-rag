@@ -44,6 +44,7 @@ class EmbeddingsConfig:
     api_key: str
     batch_size: int
     embed_workers: int
+    max_length: int
 
 
 @dataclass
@@ -141,6 +142,7 @@ def _build_config(raw: dict) -> Config:
         api_key=os.getenv("EMBEDDING_API_KEY") or em["api_key"],
         batch_size=int(os.getenv("EMBEDDING_BATCH_SIZE") or em["batch_size"]),
         embed_workers=int(os.getenv("EMBEDDING_WORKERS") or em["embed_workers"]),
+        max_length=int(os.getenv("EMBEDDING_MAX_LENGTH") or em.get("max_length", 2048)),
     )
 
     ch = raw["chroma"]

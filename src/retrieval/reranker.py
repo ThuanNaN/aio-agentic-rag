@@ -5,7 +5,7 @@ from langchain_core.documents import Document
 from sentence_transformers import CrossEncoder
 
 
-_DEFAULT_MODEL = "BAAI/bge-m3"
+_DEFAULT_MODEL = "BAAI/bge-reranker-v2-m3"
 _cached: dict[str, CrossEncoder] = {}
 
 

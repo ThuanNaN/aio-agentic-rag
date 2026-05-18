@@ -38,6 +38,10 @@ class BenchmarkRequest(BaseModel):
     sample_n: int = Field(0, ge=0, description="Gold queries to use (0 = all)")
     recall_k: int = Field(5, ge=1)
     ndcg_k: int = Field(10, ge=1)
+    use_ragas: bool = Field(
+        False,
+        description="Generate LLM answers and run RAGAS metrics (faithfulness, relevancy, context precision)",
+    )
 
 
 class BenchmarkResponse(BaseModel):

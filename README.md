@@ -44,7 +44,7 @@ If fewer than 2 relevant documents are found, the agent rewrites the query and r
 | Embeddings | `google/embeddinggemma-300m` via vLLM server |
 | Vector store | ChromaDB (HTTP, Docker) |
 | Sparse retrieval | `rank-bm25` (BM25Okapi) |
-| Reranker | `BAAI/bge-m3` CrossEncoder |
+| Reranker | `BAAI/bge-reranker-v2-m3` CrossEncoder |
 | Graph | NetworkX DiGraph (amended_by · references · replaces) |
 | API | FastAPI |
 
@@ -67,7 +67,7 @@ If fewer than 2 relevant documents are found, the agent rewrites the query and r
 ```bash
 git clone https://github.com/ThuanNaN/aio-agentic-rag.git
 cd aio-agentic-rag
-pip install -e "."
+pip install -e ".[all]"
 ```
 
 ### 2. Configure

@@ -20,6 +20,11 @@ def main():
     parser.add_argument("--sample", type=int, default=0, help="Number of gold queries (0 = all)")
     parser.add_argument("--recall-k", type=int, default=5)
     parser.add_argument("--ndcg-k", type=int, default=10)
+    parser.add_argument(
+        "--ragas",
+        action="store_true",
+        help="Generate LLM answers and run RAGAS metrics (faithfulness, relevancy, context precision)",
+    )
     args = parser.parse_args()
 
     from src.evaluation.benchmark import run_benchmark, STRATEGIES
@@ -32,6 +37,7 @@ def main():
         recall_k=args.recall_k,
         ndcg_k=args.ndcg_k,
         sample_n=n,
+        use_ragas=args.ragas,
     )
 
 
