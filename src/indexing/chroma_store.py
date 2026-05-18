@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import chromadb
 from chromadb.api import ClientAPI
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from tqdm import tqdm
@@ -34,10 +35,12 @@ def upsert_documents(
     chunks: list[Document],
     emb_fn: VLLMEmbeddings | None = None,
     batch_size: int | None = None,
+    upsert_workers: int = 4,
 ) -> int:
     """
-    Embed and upsert chunks in the same batch loop so peak RAM stays at one
-    batch rather than holding all embeddings in memory at once.
+    Embed all chunks in parallel (across all vLLM backends), then upsert to
+    Chroma with concurrent workers. Parallel embedding uses embed_workers
+    threads each sending batch_size texts — saturating all backends at once.
     """
     if emb_fn is None:
         emb_fn = get_embeddings()
@@ -46,20 +49,28 @@ def upsert_documents(
     ids = [f"{c.metadata['doc_id']}_chunk{c.metadata['chunk_index']}" for c in chunks]
     metadatas = [c.metadata for c in chunks]
 
+    print(f"Embedding {len(texts)} chunks in parallel...")
+    all_embeddings = emb_fn.embed_parallel(texts)
+
     collection = store._collection  # type: ignore[attr-defined]
     bs = batch_size if batch_size is not None else config.chroma.upsert_bs
-    with tqdm(total=len(chunks), desc="Embedding & Upserting", unit="chunk") as bar:
-        for i in range(0, len(chunks), bs):
-            end = min(i + bs, len(chunks))
-            batch_texts = texts[i:end]
-            embeddings = emb_fn._embed_batch(batch_texts)
-            collection.upsert(
-                ids=ids[i:end],
-                embeddings=embeddings,
-                documents=batch_texts,
-                metadatas=metadatas[i:end],
-            )
-            bar.update(end - i)
+
+    def _upsert(i: int) -> int:
+        end = min(i + bs, len(chunks))
+        collection.upsert(
+            ids=ids[i:end],
+            embeddings=all_embeddings[i:end],
+            documents=texts[i:end],
+            metadatas=metadatas[i:end],
+        )
+        return end - i
+
+    offsets = list(range(0, len(chunks), bs))
+    with tqdm(total=len(chunks), desc="Upserting", unit="chunk") as bar:
+        with ThreadPoolExecutor(max_workers=upsert_workers) as executor:
+            futures = {executor.submit(_upsert, i): i for i in offsets}
+            for future in as_completed(futures):
+                bar.update(future.result())
 
     return len(chunks)
 
