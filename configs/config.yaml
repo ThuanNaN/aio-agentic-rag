@@ -33,6 +33,7 @@ embeddings:
   api_key: "empty"
   batch_size: 512
   embed_workers: 8
+  max_length: 2048  # google/embeddinggemma-300m
 
 chroma:
   collection_name: "vn_legal_docs"

@@ -19,7 +19,11 @@ class VLLMEmbeddings(Embeddings):
         self._workers = config.embeddings.embed_workers
 
     def _embed_batch(self, batch: list[str]) -> list[list[float]]:
-        response = self._client.embeddings.create(model=self._model, input=batch)
+        response = self._client.embeddings.create(
+            model=self._model,
+            input=batch,
+            extra_body={"truncate_prompt_tokens": self._config.max_length},
+        )
         return [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
