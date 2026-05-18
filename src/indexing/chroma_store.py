@@ -40,7 +40,7 @@ def upsert_documents(
     upsert_workers: int = 4,
     start_offset: int = 0,
     progress_path: str | None = None,
-    segment_size: int = 5000,
+    segment_size: int = 10000,
 ) -> int:
     """
     Embed and upsert chunks into Chroma in segments, checkpointing after each.

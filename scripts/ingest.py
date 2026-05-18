@@ -188,9 +188,9 @@ def main():
     parser.add_argument("--from-step", choices=STEPS, default=None,
                         dest="from_step",
                         help="Force-restart pipeline from this step (implies --resume for earlier steps)")
-    parser.add_argument("--segment-size", type=int, default=5000,
+    parser.add_argument("--segment-size", type=int, default=10000,
                         dest="segment_size",
-                        help="Chunks per Chroma upsert segment (default: 5000)")
+                        help="Chunks per Chroma upsert segment (default: 10000)")
     args = parser.parse_args()
 
     # --from-step implies resume for everything before the chosen step,
