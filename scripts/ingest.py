@@ -64,7 +64,7 @@ def step_load(sample_size: int | None, resume: bool) -> None:
     print(f"[load] {len(rels)} relationships → {rels_path}")
 
 
-def step_clean(resume: bool) -> None:
+def step_clean(resume: bool, sample_size: int | None) -> None:
     out_path = _PROCESSED / "cleaned_docs.json"
     if resume and out_path.exists():
         _skip("clean", out_path)
@@ -75,6 +75,8 @@ def step_clean(resume: bool) -> None:
 
     data = json.loads((_PROCESSED / "raw_docs.json").read_text())
     docs = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in data]
+    if sample_size:
+        docs = docs[:sample_size]
     cleaned = clean_documents(docs, workers=config.chunking.clean_workers)
     out_path.write_text(
         json.dumps(
@@ -85,7 +87,7 @@ def step_clean(resume: bool) -> None:
     print(f"[clean] {len(cleaned)} docs → {out_path}")
 
 
-def step_chunk(resume: bool) -> None:
+def step_chunk(resume: bool, sample_size: int | None) -> None:
     out_path = _PROCESSED / "chunks.json"
     if resume and out_path.exists():
         _skip("chunk", out_path)
@@ -96,6 +98,8 @@ def step_chunk(resume: bool) -> None:
 
     data = json.loads((_PROCESSED / "cleaned_docs.json").read_text())
     docs = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in data]
+    if sample_size:
+        docs = docs[:sample_size]
     chunks = chunk_documents(docs, config)
     out_path.write_text(
         json.dumps(
@@ -210,8 +214,8 @@ def main():
     sample_size = args.sample if args.sample > 0 else None
 
     step_load(sample_size, resume=should_resume("load"))
-    step_clean(resume=should_resume("clean"))
-    step_chunk(resume=should_resume("chunk"))
+    step_clean(resume=should_resume("clean"), sample_size=sample_size)
+    step_chunk(resume=should_resume("chunk"), sample_size=sample_size)
     step_chroma(resume=should_resume("chroma"), segment_size=args.segment_size)
     step_bm25(resume=should_resume("bm25"))
     step_graph(resume=should_resume("graph"))
