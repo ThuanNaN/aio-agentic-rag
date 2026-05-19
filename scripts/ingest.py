@@ -98,9 +98,9 @@ def step_chunk(resume: bool, sample_size: int | None) -> None:
 
     data = json.loads((_PROCESSED / "cleaned_docs.json").read_text())
     docs = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in data]
-    if sample_size:
-        docs = docs[:sample_size]
     chunks = chunk_documents(docs, config)
+    if sample_size:
+        chunks = chunks[:sample_size]
     out_path.write_text(
         json.dumps(
             [{"page_content": c.page_content, "metadata": c.metadata} for c in chunks],
