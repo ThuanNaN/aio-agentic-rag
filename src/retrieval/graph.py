@@ -53,6 +53,7 @@ def graph_search(
     initial_k: int = 3,
     max_hops: int = 2,
     edge_types: set[str] | None = None,
+    trace: list | None = None,
 ) -> list[Document]:
     """
     1. Dense-retrieve `initial_k` seed documents.
@@ -65,21 +66,38 @@ def graph_search(
     seed_docs = dense_search(store, query, k=initial_k)
     seed_ids = {d.metadata.get("doc_id", "") for d in seed_docs}
 
+    if trace is not None:
+        sample = ", ".join(list(seed_ids)[:3])
+        suffix = "…" if len(seed_ids) > 3 else ""
+        trace.append({"icon": "🔍", "label": "Dense seed search", "detail": f"{len(seed_docs)} seed nodes: {sample}{suffix}"})
+
     reachable: set[str] = set(seed_ids)
     frontier = set(seed_ids)
-    for _ in range(max_hops):
+    for hop in range(max_hops):
         next_frontier: set[str] = set()
+        edge_types_seen: set[str] = set()
         for node in frontier:
             if node not in graph:
                 continue
             for _, neighbor, data in graph.out_edges(node, data=True):
-                if data.get("rel_type", "") in allowed and neighbor not in reachable:
+                rel = data.get("rel_type", "")
+                if rel in allowed and neighbor not in reachable:
                     next_frontier.add(neighbor)
+                    edge_types_seen.add(rel)
             for neighbor, _, data in graph.in_edges(node, data=True):
-                if data.get("rel_type", "") in allowed and neighbor not in reachable:
+                rel = data.get("rel_type", "")
+                if rel in allowed and neighbor not in reachable:
                     next_frontier.add(neighbor)
+                    edge_types_seen.add(rel)
         reachable |= next_frontier
         frontier = next_frontier
+        if trace is not None:
+            if next_frontier:
+                rels = ", ".join(list(edge_types_seen)[:2])
+                suffix = "…" if len(edge_types_seen) > 2 else ""
+                trace.append({"icon": "🕸️", "label": f"Graph hop {hop + 1}", "detail": f"+{len(next_frontier)} nodes via [{rels}{suffix}]"})
+            else:
+                trace.append({"icon": "🕸️", "label": f"Graph hop {hop + 1}", "detail": "no new nodes — frontier exhausted"})
         if not frontier:
             break
 
@@ -89,6 +107,8 @@ def graph_search(
         id_filter = {"doc_id": {"$in": list(extra_ids)}}
         extra_docs = dense_search(store, query, k=k * 2, metadata_filter=id_filter)
         all_docs.extend(extra_docs)
+        if trace is not None:
+            trace.append({"icon": "📥", "label": "Fetch expanded nodes", "detail": f"{len(extra_docs)} docs from {len(extra_ids)} expanded nodes"})
 
     seen: set[str] = set()
     deduped: list[Document] = []
@@ -98,4 +118,8 @@ def graph_search(
             seen.add(key)
             deduped.append(doc)
 
-    return deduped[:k]
+    result = deduped[:k]
+    if trace is not None:
+        trace.append({"icon": "📄", "label": "Graph result", "detail": f"{len(result)} docs from {len(reachable)} total reachable nodes"})
+
+    return result

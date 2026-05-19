@@ -40,14 +40,18 @@ def _skip(label: str, path: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 def step_load(sample_size: int | None, resume: bool) -> None:
+    from src.ingestion import progress as p
+
     raw_path = _PROCESSED / "raw_docs.json"
     rels_path = _PROCESSED / "relationships.json"
     if resume and raw_path.exists() and rels_path.exists():
         _skip("load", raw_path)
+        p.step_skip("load", f"{raw_path} already exists")
         return
 
     from src.ingestion.loader import load_documents, load_relationships
 
+    p.step_start("load", total=sample_size or 0)
     docs = load_documents(config, sample_size=sample_size)
     _PROCESSED.mkdir(parents=True, exist_ok=True)
     raw_path.write_text(
@@ -62,12 +66,16 @@ def step_load(sample_size: int | None, resume: bool) -> None:
     rels = load_relationships(config, doc_ids=doc_ids)
     rels_path.write_text(json.dumps(rels, ensure_ascii=False, indent=2))
     print(f"[load] {len(rels)} relationships → {rels_path}")
+    p.step_done("load", count=len(docs), message=f"{len(docs)} docs, {len(rels)} relationships")
 
 
 def step_clean(resume: bool, sample_size: int | None) -> None:
+    from src.ingestion import progress as p
+
     out_path = _PROCESSED / "cleaned_docs.json"
     if resume and out_path.exists():
         _skip("clean", out_path)
+        p.step_skip("clean", f"{out_path} already exists")
         return
 
     from langchain_core.documents import Document
@@ -77,6 +85,7 @@ def step_clean(resume: bool, sample_size: int | None) -> None:
     docs = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in data]
     if sample_size:
         docs = docs[:sample_size]
+    p.step_start("clean", total=len(docs))
     cleaned = clean_documents(docs, workers=config.chunking.clean_workers)
     out_path.write_text(
         json.dumps(
@@ -85,12 +94,16 @@ def step_clean(resume: bool, sample_size: int | None) -> None:
         )
     )
     print(f"[clean] {len(cleaned)} docs → {out_path}")
+    p.step_done("clean", count=len(cleaned), message=f"{len(cleaned)} docs")
 
 
 def step_chunk(resume: bool, sample_size: int | None) -> None:
+    from src.ingestion import progress as p
+
     out_path = _PROCESSED / "chunks.json"
     if resume and out_path.exists():
         _skip("chunk", out_path)
+        p.step_skip("chunk", f"{out_path} already exists")
         return
 
     from langchain_core.documents import Document
@@ -98,6 +111,7 @@ def step_chunk(resume: bool, sample_size: int | None) -> None:
 
     data = json.loads((_PROCESSED / "cleaned_docs.json").read_text())
     docs = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in data]
+    p.step_start("chunk", total=len(docs))
     chunks = chunk_documents(docs, config)
     if sample_size:
         chunks = chunks[:sample_size]
@@ -108,9 +122,12 @@ def step_chunk(resume: bool, sample_size: int | None) -> None:
         )
     )
     print(f"[chunk] {len(chunks)} chunks → {out_path}")
+    p.step_done("chunk", count=len(chunks), message=f"{len(chunks)} chunks")
 
 
 def step_chroma(resume: bool, segment_size: int) -> None:
+    from src.ingestion import progress as p
+
     progress_path = _PROCESSED / "chroma_progress.json"
 
     from langchain_chroma import Chroma
@@ -124,14 +141,20 @@ def step_chroma(resume: bool, segment_size: int) -> None:
 
     start_offset = 0
     if resume and progress_path.exists():
-        progress = json.loads(progress_path.read_text())
-        start_offset = progress.get("last_offset", 0)
+        prog = json.loads(progress_path.read_text())
+        start_offset = prog.get("last_offset", 0)
         if start_offset >= total:
             print(f"[skip] chroma — all {total} chunks already indexed")
+            p.step_skip("chroma", f"all {total} chunks already indexed")
             return
         print(f"[resume] chroma — continuing from chunk {start_offset}/{total}")
     else:
         progress_path.write_text(json.dumps({"last_offset": 0, "total": total}))
+
+    p.step_start("chroma", total=total)
+
+    def _on_segment(offset: int) -> None:
+        p.step_update("chroma", count=offset, total=total)
 
     client = _make_client(config.chroma.host, config.chroma.port)
     emb_fn = get_embeddings()
@@ -145,14 +168,19 @@ def step_chroma(resume: bool, segment_size: int) -> None:
         start_offset=start_offset,
         progress_path=str(progress_path),
         segment_size=segment_size,
+        on_segment=_on_segment,
     )
     print(f"[chroma] indexed {n} chunks (total {total}) → {config.chroma.host}:{config.chroma.port}")
+    p.step_done("chroma", count=n, message=f"{n} chunks indexed")
 
 
 def step_bm25(resume: bool) -> None:
+    from src.ingestion import progress as p
+
     out_path = Path(config.paths.bm25_index)
     if resume and out_path.exists():
         _skip("bm25", out_path)
+        p.step_skip("bm25", f"{out_path} already exists")
         return
 
     from langchain_core.documents import Document
@@ -160,21 +188,68 @@ def step_bm25(resume: bool) -> None:
 
     data = json.loads((_PROCESSED / "chunks.json").read_text())
     chunks = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in data]
+    p.step_start("bm25", total=len(chunks))
     build_bm25_index(chunks, save_path=str(out_path))
     print(f"[bm25] {len(chunks)} chunks → {out_path}")
+    p.step_done("bm25", count=len(chunks), message=f"{len(chunks)} chunks")
 
 
 def step_graph(resume: bool) -> None:
+    from src.ingestion import progress as p
+
     out_path = Path(config.paths.graph_index)
     if resume and out_path.exists():
         _skip("graph", out_path)
+        p.step_skip("graph", f"{out_path} already exists")
         return
 
     from src.retrieval.graph import build_graph
 
     rels = json.loads((_PROCESSED / "relationships.json").read_text())
+    p.step_start("graph", total=len(rels))
     G = build_graph(rels, save_path=str(out_path))
     print(f"[graph] {G.number_of_nodes()} nodes, {G.number_of_edges()} edges → {out_path}")
+    p.step_done("graph", count=G.number_of_nodes(),
+                message=f"{G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator (called by both CLI and API)
+# ---------------------------------------------------------------------------
+
+def run_pipeline(
+    sample_size: int | None = None,
+    resume: bool = False,
+    from_step: str | None = None,
+    segment_size: int = 10000,
+) -> None:
+    from src.ingestion import progress as p
+
+    force_from = STEPS.index(from_step) if from_step else len(STEPS)
+
+    def should_resume(step_name: str) -> bool:
+        if from_step is None:
+            return resume
+        idx = STEPS.index(step_name)
+        if idx < force_from:
+            return True
+        if idx == force_from:
+            return False
+        return resume
+
+    p.reset()
+    try:
+        step_load(sample_size, resume=should_resume("load"))
+        step_clean(resume=should_resume("clean"), sample_size=sample_size)
+        step_chunk(resume=should_resume("chunk"), sample_size=sample_size)
+        step_chroma(resume=should_resume("chroma"), segment_size=segment_size)
+        step_bm25(resume=should_resume("bm25"))
+        step_graph(resume=should_resume("graph"))
+        p.pipeline_done()
+        print("\nIngestion complete.")
+    except Exception as exc:
+        p.pipeline_error(str(exc))
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -197,30 +272,12 @@ def main():
                         help="Chunks per Chroma upsert segment (default: 10000)")
     args = parser.parse_args()
 
-    # --from-step implies resume for everything before the chosen step,
-    # and forces re-run of the chosen step and everything after.
-    force_from = STEPS.index(args.from_step) if args.from_step else len(STEPS)
-
-    def should_resume(step_name: str) -> bool:
-        if args.from_step is None:
-            return args.resume
-        idx = STEPS.index(step_name)
-        if idx < force_from:
-            return True   # earlier step: always resume (skip if done)
-        if idx == force_from:
-            return False  # target step: always re-run
-        return args.resume  # later steps: respect --resume flag
-
-    sample_size = args.sample if args.sample > 0 else None
-
-    step_load(sample_size, resume=should_resume("load"))
-    step_clean(resume=should_resume("clean"), sample_size=sample_size)
-    step_chunk(resume=should_resume("chunk"), sample_size=sample_size)
-    step_chroma(resume=should_resume("chroma"), segment_size=args.segment_size)
-    step_bm25(resume=should_resume("bm25"))
-    step_graph(resume=should_resume("graph"))
-
-    print("\nIngestion complete.")
+    run_pipeline(
+        sample_size=args.sample if args.sample > 0 else None,
+        resume=args.resume,
+        from_step=args.from_step,
+        segment_size=args.segment_size,
+    )
 
 
 if __name__ == "__main__":

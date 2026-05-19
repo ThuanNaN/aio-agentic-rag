@@ -11,7 +11,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import gradio as gr
 
-from api_client import health, query as api_query, run_benchmark as api_benchmark
+from api_client import (
+    health,
+    query as api_query,
+    run_benchmark as api_benchmark,
+)
 
 STRATEGIES = ["naive", "hybrid", "reranker", "graph", "agentic"]
 _COLORS = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#CCB974"]
@@ -29,14 +33,25 @@ def check_health() -> str:
     return "⚠️ Indexes not ready — run: python scripts/ingest.py"
 
 
+def _format_trace(steps: list[dict]) -> str:
+    if not steps:
+        return ""
+    lines = []
+    for s in steps:
+        ms = s.get("latency_ms", 0)
+        ms_str = f"  `{ms:.0f}ms`" if ms > 0 else ""
+        lines.append(f"{s['icon']} **{s['label']}** — {s['detail']}{ms_str}")
+    return "\n\n".join(lines)
+
+
 def do_query(question: str, strategy: str, k: int):
     if not question.strip():
-        return "Please enter a question.", None, ""
+        return "Please enter a question.", None, "", ""
 
     result = api_query(question, strategy, int(k))
 
     if "error" in result:
-        return f"Error: {result['error']}", None, ""
+        return f"Error: {result['error']}", None, "", ""
 
     answer = result["answer"]
     info = (
@@ -56,7 +71,9 @@ def do_query(question: str, strategy: str, k: int):
         })
     sources_df = pd.DataFrame(rows) if rows else pd.DataFrame()
 
-    return answer, sources_df, info
+    trace_md = _format_trace(result.get("trace", []))
+
+    return answer, sources_df, info, trace_md
 
 
 def do_benchmark(strategies: list[str], sample_n: int, recall_k: int, ndcg_k: int):
@@ -153,8 +170,17 @@ with gr.Blocks(title="AIO Agentic RAG", theme=green_theme) as demo:
         ask_btn = gr.Button("Ask", variant="primary")
 
         info_lbl = gr.Textbox(label="Latency & info", interactive=False, max_lines=1)
-        answer_box = gr.Textbox(label="Answer", lines=10, interactive=False)
-        sources_table = gr.DataFrame(label="Sources", interactive=False, wrap=True)
+
+        with gr.Row():
+            with gr.Column(scale=2):
+                answer_box = gr.Textbox(label="Answer", lines=14, interactive=False)
+                sources_table = gr.DataFrame(label="Sources", interactive=False, wrap=True)
+            with gr.Column(scale=1):
+                trace_box = gr.Markdown(
+                    label="Execution Flow",
+                    value="*Run a query to see the retrieval flow here.*",
+                    elem_id="trace-panel",
+                )
 
         gr.Examples(
             examples=[
@@ -174,12 +200,12 @@ with gr.Blocks(title="AIO Agentic RAG", theme=green_theme) as demo:
         ask_btn.click(
             fn=do_query,
             inputs=[question_in, strategy_in, k_in],
-            outputs=[answer_box, sources_table, info_lbl],
+            outputs=[answer_box, sources_table, info_lbl, trace_box],
         )
         question_in.submit(
             fn=do_query,
             inputs=[question_in, strategy_in, k_in],
-            outputs=[answer_box, sources_table, info_lbl],
+            outputs=[answer_box, sources_table, info_lbl, trace_box],
         )
 
     with gr.Tab("Benchmark"):
