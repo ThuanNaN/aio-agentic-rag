@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from configs import config
-from src.api.routers import benchmark, query
+from src.api.routers import benchmark, ingest, query
 from src.api.schemas import HealthResponse
 
 
@@ -58,6 +58,7 @@ def create_app() -> FastAPI:
 
     app.include_router(query.router)
     app.include_router(benchmark.router)
+    app.include_router(ingest.router)
 
     @app.get("/health", response_model=HealthResponse)
     async def health():

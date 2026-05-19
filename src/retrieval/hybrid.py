@@ -21,6 +21,7 @@ def hybrid_search(
     dense_k: int = 10,
     rrf_k: int = 60,
     metadata_filter: dict | None = None,
+    trace: list | None = None,
 ) -> list[Document]:
     """
     Fuse BM25 and dense results via RRF.
@@ -28,6 +29,10 @@ def hybrid_search(
     """
     bm25_results = bm25_search(bm25_index, query, k=bm25_k)
     dense_results = dense_search(store, query, k=dense_k, metadata_filter=metadata_filter)
+
+    if trace is not None:
+        trace.append({"icon": "📖", "label": "BM25 search", "detail": f"{len(bm25_results)} candidates (keyword)"})
+        trace.append({"icon": "🔍", "label": "Dense search", "detail": f"{len(dense_results)} candidates (semantic)"})
 
     scores: dict[str, float] = {}
     doc_map: dict[str, Document] = {}
@@ -43,4 +48,9 @@ def hybrid_search(
         doc_map[key] = doc
 
     ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [doc_map[key] for key, _ in ranked[:k]]
+    result = [doc_map[key] for key, _ in ranked[:k]]
+
+    if trace is not None:
+        trace.append({"icon": "🔀", "label": "RRF fusion", "detail": f"{len(scores)} unique candidates → top {len(result)} docs"})
+
+    return result

@@ -22,12 +22,20 @@ class SourceDocument(BaseModel):
     excerpt: str = ""
 
 
+class TraceStep(BaseModel):
+    icon: str
+    label: str
+    detail: str
+    latency_ms: float = 0.0
+
+
 class QueryResponse(BaseModel):
     question: str
     strategy: Strategy
     answer: str
     sources: list[SourceDocument]
     latency_ms: float
+    trace: list[TraceStep] = []
 
 
 class BenchmarkRequest(BaseModel):
