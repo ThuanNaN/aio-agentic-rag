@@ -198,6 +198,8 @@ def main():
     force_from = STEPS.index(args.from_step) if args.from_step else len(STEPS)
 
     def should_resume(step_name: str) -> bool:
+        if args.from_step is None:
+            return args.resume
         idx = STEPS.index(step_name)
         if idx < force_from:
             return True   # earlier step: always resume (skip if done)
